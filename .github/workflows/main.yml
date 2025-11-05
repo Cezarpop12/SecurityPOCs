@@ -1,0 +1,45 @@
+name: CI - Backend
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # Least privilege GITHUB_TOKEN (AC-22)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Dependency scan
+        run: |
+          dotnet list SecurityPOCs package --vulnerable > sca-report.txt || true
+          echo "----- Vulnerability report -----"
+          cat sca-report.txt
+          # Fail if High or Critical vulnerabilities found
+          if grep -E "High|Critical" sca-report.txt; then
+            echo "High or Critical vulnerabilities found. Failing build."
+            exit 1
+          fi
+
+      - name: Upload dependency scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-report
+          path: sca-report.txt
